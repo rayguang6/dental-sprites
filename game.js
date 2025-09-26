@@ -29,6 +29,15 @@ class DentalSimulation {
         this.beds = []; // Array of bed positions
         this.effects = []; // Array of visual effects (confetti, money, etc.)
         
+        // Patience system
+        this.patienceMax = 100; // Maximum patience level
+        this.patienceDecayRate = 0.1; // How fast patience decreases per frame
+        this.patienceColors = {
+            happy: '#4CAF50',    // Green
+            neutral: '#FFC107',  // Yellow
+            angry: '#F44336'     // Red
+        };
+        
         // Movement sequence
         this.movementSequence = [
             // { direction: 'up', steps: 2 },
@@ -285,6 +294,9 @@ class DentalSimulation {
         // Draw all effects (on top of everything)
         this.drawEffects();
         
+        // Draw patience bars (on top of everything)
+        this.drawPatienceBars();
+        
         // Draw grid overlay to show tile boundaries
         this.drawGrid();
     }
@@ -517,7 +529,10 @@ class DentalSimulation {
             currentPathIndex: 0,
             state: 'spawned', // 'spawned', 'walking', 'sitting', 'walking_to_treatment', 'treating'
             waitTime: 0,
-            treatmentTime: 0
+            treatmentTime: 0,
+            // Patience system
+            patience: this.patienceMax,
+            patienceState: 'happy' // happy, neutral, angry
         };
         
         this.patients.push(patient);
@@ -572,6 +587,8 @@ class DentalSimulation {
     
     updatePatients() {
         this.patients.forEach(patient => {
+            // Update patience for all patients
+            this.updatePatientPatience(patient);
             if (patient.state === 'spawned') {
                 // Find an available chair
                 const availableChair = this.findAvailableChair();
@@ -746,6 +763,96 @@ class DentalSimulation {
                 this.ctx.fill();
                 this.ctx.restore();
             });
+        });
+    }
+    
+    updatePatientPatience(patient) {
+        // Decrease patience over time
+        patient.patience -= this.patienceDecayRate;
+        
+        // Clamp patience between 0 and max
+        patient.patience = Math.max(0, Math.min(this.patienceMax, patient.patience));
+        
+        // Update patience state based on current patience level
+        if (patient.patience > 60) {
+            patient.patienceState = 'happy';
+        } else if (patient.patience > 30) {
+            patient.patienceState = 'neutral';
+        } else {
+            patient.patienceState = 'angry';
+        }
+        
+        // If patience reaches 0, patient leaves (angry)
+        if (patient.patience <= 0 && patient.state !== 'treating') {
+            console.log(`Patient ${patient.spriteKey} left angry!`);
+            this.removePatient(patient);
+        }
+    }
+    
+    removePatient(patient) {
+        // Free up chair if patient was sitting
+        if (patient.targetChair) {
+            const chairKey = `${patient.targetChair.x},${patient.targetChair.y}`;
+            this.occupiedChairs.delete(chairKey);
+        }
+        
+        // Free up bed if patient was being treated
+        if (patient.targetBed) {
+            const bedKey = `${patient.targetBed.x},${patient.targetBed.y}`;
+            this.occupiedBeds.delete(bedKey);
+        }
+        
+        // Remove patient from array
+        const index = this.patients.indexOf(patient);
+        if (index > -1) {
+            this.patients.splice(index, 1);
+        }
+    }
+    
+    drawPatienceBars() {
+        this.patients.forEach(patient => {
+            const pixelX = Math.round(patient.pixelX);
+            const pixelY = Math.round(patient.pixelY);
+            
+            // Position bar above patient
+            const barX = pixelX;
+            const barY = pixelY - 8;
+            const barWidth = 32;
+            const barHeight = 6;
+            
+            // Background (dark)
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            // Patience bar
+            const patiencePercent = patient.patience / this.patienceMax;
+            const fillWidth = barWidth * patiencePercent;
+            
+            // Color based on patience state
+            let barColor = this.patienceColors.happy;
+            if (patient.patienceState === 'neutral') {
+                barColor = this.patienceColors.neutral;
+            } else if (patient.patienceState === 'angry') {
+                barColor = this.patienceColors.angry;
+            }
+            
+            this.ctx.fillStyle = barColor;
+            this.ctx.fillRect(barX, barY, fillWidth, barHeight);
+            
+            // Emoji indicator
+            const emojiX = pixelX + 16;
+            const emojiY = pixelY - 20;
+            this.ctx.font = '12px Arial';
+            this.ctx.textAlign = 'center';
+            
+            let emoji = '😊'; // Happy
+            if (patient.patienceState === 'neutral') {
+                emoji = '😐'; // Neutral
+            } else if (patient.patienceState === 'angry') {
+                emoji = '😠'; // Angry
+            }
+            
+            this.ctx.fillText(emoji, emojiX, emojiY);
         });
     }
     
