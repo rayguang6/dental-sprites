@@ -9,33 +9,20 @@ class DentalSimulation {
         this.gridWidth = 10;
         this.gridHeight = 10;
         
+        // Character starting position
+        this.characterStartX = 7;
+        this.characterStartY = 6;
+        
         // Map image
         this.mapImage = null;
         
         // Character position (now with smooth interpolation)
-        this.character = {
-            // Grid position (target)
-            gridX: 4,
-            gridY: 8,
-            // Pixel position (current visual position)
-            pixelX: 4 * 32,
-            pixelY: 8 * 32,
-            // Animation state
-            isMoving: false,
-            moveStartTime: 0,
-            moveFromX: 4 * 32,
-            moveFromY: 8 * 32,
-            moveToX: 4 * 32,
-            moveToY: 8 * 32,
-            // Animation properties
-            direction: 'down',
-            currentFrame: 0,
-            frameCount: 0,
-            animationState: 'idle' // 'idle', 'walking', 'celebrate'
-        };
+        this.character = this.createCharacter();
         
-        // Sprite image
+        // Sprite images
         this.spriteImage = null;
+        this.patientSprites = {}; // Store all patient sprites
+        this.patients = []; // Array of spawned patients
         
         // Movement sequence
         this.movementSequence = [
@@ -52,6 +39,10 @@ class DentalSimulation {
         this.moveDuration = 500; // Time for each move animation
         this.celebrationDuration = 2000; // Celebrate for 2 seconds
         this.celebrationStartTime = 0;
+        
+        // Patient spawning
+        this.spawnTimer = 0;
+        this.spawnInterval = 3000; // Spawn a patient every 3 seconds
         
         this.loadMap();
         this.startGameLoop();
@@ -91,6 +82,47 @@ class DentalSimulation {
             this.render();
         };
         this.spriteImage.src = 'images/avatar/patient1.png';
+        
+        // Load all patient sprites
+        this.loadAllPatientSprites();
+    }
+    
+    loadAllPatientSprites() {
+        // Load patient1-5 sprites
+        for (let i = 1; i <= 5; i++) {
+            const sprite = new Image();
+            sprite.onload = () => {
+                console.log(`Patient${i} sprite loaded successfully`);
+            };
+            sprite.onerror = () => {
+                console.error(`Failed to load patient${i} sprite`);
+            };
+            sprite.src = `images/avatar/patient${i}.png`;
+            this.patientSprites[`patient${i}`] = sprite;
+        }
+    }
+    
+    createCharacter() {
+        return {
+            // Grid position (target)
+            gridX: this.characterStartX,
+            gridY: this.characterStartY,
+            // Pixel position (current visual position)
+            pixelX: this.characterStartX * this.tileSize,
+            pixelY: this.characterStartY * this.tileSize,
+            // Animation state
+            isMoving: false,
+            moveStartTime: 0,
+            moveFromX: this.characterStartX * this.tileSize,
+            moveFromY: this.characterStartY * this.tileSize,
+            moveToX: this.characterStartX * this.tileSize,
+            moveToY: this.characterStartY * this.tileSize,
+            // Animation properties
+            direction: 'down',
+            currentFrame: 0,
+            frameCount: 0,
+            animationState: 'idle' // 'idle', 'walking', 'celebrate'
+        };
     }
     
     // Easing function for smooth animation
@@ -102,6 +134,7 @@ class DentalSimulation {
         // Update movement and animation
         this.updateMovement();
         this.updateAnimation();
+        this.updateSpawning();
         
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -123,6 +156,9 @@ class DentalSimulation {
         
         // Draw character
         this.drawCharacter();
+        
+        // Draw all patients
+        this.drawPatients();
         
         // Draw grid overlay to show tile boundaries
         this.drawGrid();
@@ -316,14 +352,100 @@ class DentalSimulation {
         }
     }
     
+    updateSpawning() {
+        // Update spawn timer
+        this.spawnTimer += 16; // Assuming 60fps, so ~16ms per frame
+        
+        if (this.spawnTimer >= this.spawnInterval) {
+            this.spawnPatient();
+            this.spawnTimer = 0;
+        }
+    }
+    
+    spawnPatient() {
+        // Randomly select patient sprite (1-5)
+        const patientNumber = Math.floor(Math.random() * 5) + 1;
+        const spriteKey = `patient${patientNumber}`;
+        
+        // Create new patient
+        const patient = {
+            id: Date.now() + Math.random(), // Unique ID
+            gridX: 6,
+            gridY: 7,
+            pixelX: 4 * this.tileSize,
+            pixelY: 9 * this.tileSize,
+            spriteKey: spriteKey,
+            direction: 'down',
+            currentFrame: 0,
+            frameCount: 0,
+            animationState: 'idle',
+            isMoving: false,
+            moveStartTime: 0,
+            moveFromX: 4 * this.tileSize,
+            moveFromY: 9 * this.tileSize,
+            moveToX: 4 * this.tileSize,
+            moveToY: 9 * this.tileSize
+        };
+        
+        this.patients.push(patient);
+        console.log(`Spawned ${spriteKey} at (4,9)`);
+    }
+    
+    drawPatients() {
+        this.patients.forEach(patient => {
+            const pixelX = Math.round(patient.pixelX);
+            const pixelY = Math.round(patient.pixelY);
+            
+            const sprite = this.patientSprites[patient.spriteKey];
+            if (sprite && sprite.complete) {
+                // Get frame based on animation state
+                let frameX = 0;
+                if (patient.animationState === 'idle') {
+                    // Idle animation: first frame of direction
+                    const idleFrames = {
+                        'up': 6,
+                        'down': 0,
+                        'left': 3, 
+                        'right': 9
+                    };
+                    frameX = idleFrames[patient.direction] * 32;
+                } else if (patient.animationState === 'walking') {
+                    // Walking animation: cycle through 3 frames
+                    const walkFrames = {
+                        'up': [6, 7, 8],
+                        'down': [0, 1, 2], 
+                        'left': [3, 4, 5],
+                        'right': [9, 10, 11]
+                    };
+                    frameX = walkFrames[patient.direction][patient.currentFrame] * 32;
+                }
+                
+                this.ctx.drawImage(
+                    sprite,
+                    frameX, 0, 32, 32,  // Source: current frame
+                    pixelX, pixelY, 32, 32  // Destination: position on canvas
+                );
+            } else {
+                // Draw fallback rectangle if sprite not loaded
+                this.ctx.fillStyle = '#FF6B6B';
+                this.ctx.fillRect(pixelX + 4, pixelY + 4, 24, 24);
+                
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(pixelX + 4, pixelY + 4, 24, 24);
+            }
+        });
+    }
+    
     resetCharacterPosition() {
-        this.character.gridX = 4;
-        this.character.gridY = 8;
-        this.character.pixelX = 4 * this.tileSize;
-        this.character.pixelY = 8 * this.tileSize;
+        // Reset character to starting position
+        this.character.gridX = this.characterStartX;
+        this.character.gridY = this.characterStartY;
+        this.character.pixelX = this.characterStartX * this.tileSize;
+        this.character.pixelY = this.characterStartY * this.tileSize;
         this.character.isMoving = false;
         this.character.animationState = 'idle';
-        this.character.direction = 'down'; // Reset to facing down
+        this.character.direction = 'down';
         this.character.currentFrame = 0;
     }
     
