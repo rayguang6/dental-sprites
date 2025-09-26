@@ -44,6 +44,13 @@ class DentalSimulation {
         this.spawnTimer = 0;
         this.spawnInterval = 3000; // Spawn a patient every 3 seconds
         
+        // Chair positions (available seats) - vertical column
+        this.chairPositions = [
+            {x: 1, y: 1}, {x: 1, y: 2}, {x: 1, y: 3}, {x: 1, y: 4},
+            {x: 1, y: 5}, {x: 1, y: 6}, {x: 1, y: 7}, {x: 1, y: 8}
+        ];
+        this.occupiedChairs = new Set(); // Track which chairs are taken
+        
         this.loadMap();
         this.startGameLoop();
     }
@@ -135,6 +142,7 @@ class DentalSimulation {
         this.updateMovement();
         this.updateAnimation();
         this.updateSpawning();
+        this.updatePatients();
         
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -370,8 +378,8 @@ class DentalSimulation {
         // Create new patient
         const patient = {
             id: Date.now() + Math.random(), // Unique ID
-            gridX: 6,
-            gridY: 7,
+            gridX: 4,
+            gridY: 9,
             pixelX: 4 * this.tileSize,
             pixelY: 9 * this.tileSize,
             spriteKey: spriteKey,
@@ -384,7 +392,12 @@ class DentalSimulation {
             moveFromX: 4 * this.tileSize,
             moveFromY: 9 * this.tileSize,
             moveToX: 4 * this.tileSize,
-            moveToY: 9 * this.tileSize
+            moveToY: 9 * this.tileSize,
+            // Walking to chair
+            targetChair: null,
+            path: [],
+            currentPathIndex: 0,
+            state: 'spawned' // 'spawned', 'walking', 'sitting'
         };
         
         this.patients.push(patient);
@@ -435,6 +448,119 @@ class DentalSimulation {
                 this.ctx.strokeRect(pixelX + 4, pixelY + 4, 24, 24);
             }
         });
+    }
+    
+    updatePatients() {
+        this.patients.forEach(patient => {
+            if (patient.state === 'spawned') {
+                // Find an available chair
+                const availableChair = this.findAvailableChair();
+                if (availableChair) {
+                    patient.targetChair = availableChair;
+                    patient.path = this.generatePath(patient.gridX, patient.gridY, availableChair.x, availableChair.y);
+                    patient.currentPathIndex = 0;
+                    patient.state = 'walking';
+                    patient.animationState = 'walking';
+                    console.log(`Patient ${patient.spriteKey} heading to chair (${availableChair.x}, ${availableChair.y})`);
+                }
+            } else if (patient.state === 'walking') {
+                this.updatePatientMovement(patient);
+            }
+        });
+    }
+    
+    findAvailableChair() {
+        for (const chair of this.chairPositions) {
+            const chairKey = `${chair.x},${chair.y}`;
+            if (!this.occupiedChairs.has(chairKey)) {
+                this.occupiedChairs.add(chairKey);
+                return chair;
+            }
+        }
+        return null; // No available chairs
+    }
+    
+    generatePath(startX, startY, endX, endY) {
+        // Path using column 2 as the main corridor
+        const path = [];
+        
+        // Step 1: Go left to column 2 (the main corridor)
+        for (let x = startX - 1; x >= 2; x--) {
+            path.push({x: x, y: startY});
+        }
+        
+        // Step 2: Move up/down in column 2 to reach target row
+        if (startY > endY) {
+            // Go up in column 2
+            for (let y = startY - 1; y >= endY; y--) {
+                path.push({x: 2, y: y});
+            }
+        } else if (startY < endY) {
+            // Go down in column 2
+            for (let y = startY + 1; y <= endY; y++) {
+                path.push({x: 2, y: y});
+            }
+        }
+        
+        // Step 3: Move left from column 2 to target column (1)
+        if (endX < 2) {
+            for (let x = 2 - 1; x >= endX; x--) {
+                path.push({x: x, y: endY});
+            }
+        }
+        
+        return path;
+    }
+    
+    updatePatientMovement(patient) {
+        if (patient.currentPathIndex >= patient.path.length) {
+            // Reached destination
+            patient.state = 'sitting';
+            patient.animationState = 'idle';
+            patient.direction = 'right'; // Face right when sitting
+            console.log(`Patient ${patient.spriteKey} reached chair and is sitting`);
+            return;
+        }
+        
+        const currentTime = performance.now();
+        const targetPos = patient.path[patient.currentPathIndex];
+        
+        if (!patient.isMoving) {
+            // Start moving to next position in path
+            const direction = this.getDirection(patient.gridX, patient.gridY, targetPos.x, targetPos.y);
+            patient.direction = direction;
+            patient.gridX = targetPos.x;
+            patient.gridY = targetPos.y;
+            patient.moveFromX = patient.pixelX;
+            patient.moveFromY = patient.pixelY;
+            patient.moveToX = targetPos.x * this.tileSize;
+            patient.moveToY = targetPos.y * this.tileSize;
+            patient.isMoving = true;
+            patient.moveStartTime = currentTime;
+        } else {
+            // Update smooth movement
+            const elapsed = currentTime - patient.moveStartTime;
+            const progress = Math.min(elapsed / this.moveDuration, 1.0);
+            const easedProgress = this.easeInOutQuad(progress);
+            
+            patient.pixelX = patient.moveFromX + (patient.moveToX - patient.moveFromX) * easedProgress;
+            patient.pixelY = patient.moveFromY + (patient.moveToY - patient.moveFromY) * easedProgress;
+            
+            if (progress >= 1.0) {
+                patient.isMoving = false;
+                patient.pixelX = patient.moveToX;
+                patient.pixelY = patient.moveToY;
+                patient.currentPathIndex++;
+            }
+        }
+    }
+    
+    getDirection(fromX, fromY, toX, toY) {
+        if (toY < fromY) return 'up';
+        if (toY > fromY) return 'down';
+        if (toX < fromX) return 'left';
+        if (toX > fromX) return 'right';
+        return 'down';
     }
     
     resetCharacterPosition() {
