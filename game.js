@@ -23,20 +23,36 @@ class DentalSimulation {
         this.spriteImage = null;
         this.patientSprites = {}; // Store all patient sprites
         this.patients = []; // Array of spawned patients
+        this.doctorSprite = null; // Doctor sprite
+        this.doctors = []; // Array of doctors
+        this.bedSprite = null; // Bed sprite
+        this.beds = []; // Array of bed positions
+        this.effects = []; // Array of visual effects (confetti, money, etc.)
         
         // Movement sequence
         this.movementSequence = [
-            { direction: 'up', steps: 2 },
-            { direction: 'left', steps: 2 },
-            { direction: 'down', steps: 2 },
+            // { direction: 'up', steps: 2 },
+            // { direction: 'left', steps: 2 },
+            // { direction: 'down', steps: 2 },
+            // { direction: 'right', steps: 2 },
+            // { action: 'celebrate' }
+            { direction: 'left', steps: 1 },
+            { direction: 'up', steps: 1 },
             { direction: 'right', steps: 2 },
-            { action: 'celebrate' }
+            { direction: 'down', steps: 1 },
+            { direction: 'left', steps: 1 },
+            { direction: 'right', steps: 1 },
+            { direction: 'up', steps: 1 },
+            { direction: 'left', steps: 2 },
+            { direction: 'down', steps: 1 },
+            { direction: 'right', steps: 1 },
+
         ];
         this.currentStep = 0;
         this.stepsInCurrentDirection = 0;
         this.lastMoveTime = 0;
-        this.moveDelay = 100; // Minimal delay between moves for smooth continuous movement
-        this.moveDuration = 500; // Time for each move animation
+        this.moveDelay = 50; // Faster delay between moves
+        this.moveDuration = 300; // Faster move animation
         this.celebrationDuration = 2000; // Celebrate for 2 seconds
         this.celebrationStartTime = 0;
         
@@ -44,12 +60,18 @@ class DentalSimulation {
         this.spawnTimer = 0;
         this.spawnInterval = 3000; // Spawn a patient every 3 seconds
         
-        // Chair positions (available seats) - vertical column
+        // Chair positions (available seats) - vertical column, ordered by distance from door
         this.chairPositions = [
-            {x: 1, y: 1}, {x: 1, y: 2}, {x: 1, y: 3}, {x: 1, y: 4},
-            {x: 1, y: 5}, {x: 1, y: 6}, {x: 1, y: 7}, {x: 1, y: 8}
+            {x: 1, y: 8}, {x: 1, y: 7}, {x: 1, y: 6}, {x: 1, y: 5},
+            {x: 1, y: 4}, {x: 1, y: 3}, {x: 1, y: 2}, {x: 1, y: 1}
         ];
         this.occupiedChairs = new Set(); // Track which chairs are taken
+        
+        // Treatment beds
+        this.treatmentBeds = [
+            {x: 5, y: 2}, {x: 6, y: 2} //for patient to find
+        ];
+        this.occupiedBeds = new Set(); // Track which beds are taken
         
         this.loadMap();
         this.startGameLoop();
@@ -92,6 +114,12 @@ class DentalSimulation {
         
         // Load all patient sprites
         this.loadAllPatientSprites();
+        
+        // Load doctor sprite
+        this.loadDoctorSprite();
+        
+        // Load bed sprite
+        this.loadBedSprite();
     }
     
     loadAllPatientSprites() {
@@ -107,6 +135,84 @@ class DentalSimulation {
             sprite.src = `images/avatar/patient${i}.png`;
             this.patientSprites[`patient${i}`] = sprite;
         }
+    }
+    
+    loadDoctorSprite() {
+        // Load doctor sprite
+        this.doctorSprite = new Image();
+        this.doctorSprite.onload = () => {
+            console.log('Doctor sprite loaded successfully');
+            this.initializeDoctors();
+        };
+        this.doctorSprite.onerror = () => {
+            console.error('Failed to load doctor sprite');
+            this.initializeDoctors();
+        };
+        this.doctorSprite.src = 'images/avatar/doctor.png';
+    }
+    
+    initializeDoctors() {
+        // Create doctors at (4,2) and (7,2)
+        this.doctors = [
+            {
+                id: 'doctor1',
+                gridX: 5,
+                gridY: 1,
+                pixelX: 5 * this.tileSize,
+                pixelY: 1 * this.tileSize - 10,
+                direction: 'down',
+                currentFrame: 0,
+                frameCount: 0,
+                animationState: 'celebrate'
+            },
+            {
+                id: 'doctor3',
+                gridX: 6,
+                gridY: 1,
+                pixelX: 6 * this.tileSize,
+                pixelY: 1 * this.tileSize - 10,
+                direction: 'down',
+                currentFrame: 0,
+                frameCount: 0,
+                animationState: 'celebrate'
+            },
+        ];
+        console.log('Doctors initialized at (4,2) and (7,2)');
+    }
+    
+    loadBedSprite() {
+        // Load bed sprite
+        this.bedSprite = new Image();
+        this.bedSprite.onload = () => {
+            console.log('Bed sprite loaded successfully');
+            this.initializeBeds();
+        };
+        this.bedSprite.onerror = () => {
+            console.error('Failed to load bed sprite');
+            this.initializeBeds();
+        };
+        this.bedSprite.src = 'images/bed.png';
+    }
+    
+    initializeBeds() {
+        // Create beds at treatment bed positions
+        this.beds = [
+            {
+                id: 'bed1',
+                gridX: 5,
+                gridY: 1,
+                pixelX: 5 * this.tileSize,
+                pixelY: 1 * this.tileSize
+            },
+            {
+                id: 'bed2',
+                gridX: 6,
+                gridY: 1,
+                pixelX: 6 * this.tileSize,
+                pixelY: 1 * this.tileSize
+            }
+        ];
+        console.log('Beds initialized at (5,2) and (6,2)');
     }
     
     createCharacter() {
@@ -143,6 +249,8 @@ class DentalSimulation {
         this.updateAnimation();
         this.updateSpawning();
         this.updatePatients();
+        this.updateDoctors();
+        this.updateEffects();
         
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -167,6 +275,15 @@ class DentalSimulation {
         
         // Draw all patients
         this.drawPatients();
+        
+        // Draw all doctors
+        this.drawDoctors();
+        
+        // Draw all beds (on top of doctors)
+        this.drawBeds();
+        
+        // Draw all effects (on top of everything)
+        this.drawEffects();
         
         // Draw grid overlay to show tile boundaries
         this.drawGrid();
@@ -395,9 +512,12 @@ class DentalSimulation {
             moveToY: 9 * this.tileSize,
             // Walking to chair
             targetChair: null,
+            targetBed: null,
             path: [],
             currentPathIndex: 0,
-            state: 'spawned' // 'spawned', 'walking', 'sitting'
+            state: 'spawned', // 'spawned', 'walking', 'sitting', 'walking_to_treatment', 'treating'
+            waitTime: 0,
+            treatmentTime: 0
         };
         
         this.patients.push(patient);
@@ -465,7 +585,167 @@ class DentalSimulation {
                 }
             } else if (patient.state === 'walking') {
                 this.updatePatientMovement(patient);
+            } else if (patient.state === 'sitting') {
+                // Wait in chair, then go to treatment
+                patient.waitTime += 16; // Assuming 60fps
+                if (patient.waitTime >= 2000) { // Wait 2 seconds
+                    const availableBed = this.findAvailableBed();
+                    if (availableBed) {
+                        patient.targetBed = availableBed;
+                        patient.path = this.generatePathToBed(patient.gridX, patient.gridY, availableBed.x, availableBed.y);
+                        patient.currentPathIndex = 0;
+                        patient.state = 'walking_to_treatment';
+                        patient.animationState = 'walking';
+                        // Free up the chair
+                        const chairKey = `${patient.targetChair.x},${patient.targetChair.y}`;
+                        this.occupiedChairs.delete(chairKey);
+                        console.log(`Patient ${patient.spriteKey} heading to treatment bed (${availableBed.x}, ${availableBed.y})`);
+                    }
+                }
+            } else if (patient.state === 'walking_to_treatment') {
+                this.updatePatientMovement(patient);
+            } else if (patient.state === 'treating') {
+                // Treatment in progress
+                patient.treatmentTime += 16;
+                if (patient.treatmentTime >= 5000) { // Treatment takes 5 seconds
+                    // Treatment finished, create success effect
+                    this.createSuccessEffect(patient.gridX, patient.gridY);
+                    
+                    // Remove patient
+                    const bedKey = `${patient.targetBed.x},${patient.targetBed.y}`;
+                    this.occupiedBeds.delete(bedKey);
+                    const patientIndex = this.patients.indexOf(patient);
+                    this.patients.splice(patientIndex, 1);
+                    console.log(`Patient ${patient.spriteKey} treatment finished, leaving clinic`);
+                }
             }
+        });
+    }
+    
+    updateDoctors() {
+        this.doctors.forEach(doctor => {
+            // Doctors continuously celebrate (treating animation)
+            doctor.frameCount++;
+            if (doctor.frameCount >= 15) { // Slower celebration animation
+                doctor.frameCount = 0;
+                doctor.currentFrame++;
+                if (doctor.currentFrame >= 4) { // Celebrate has 4 frames
+                    doctor.currentFrame = 0;
+                }
+            }
+        });
+    }
+    
+    drawDoctors() {
+        this.doctors.forEach(doctor => {
+            const pixelX = Math.round(doctor.pixelX);
+            const pixelY = Math.round(doctor.pixelY);
+            
+            if (this.doctorSprite && this.doctorSprite.complete) {
+                // Get celebrate animation frame (frames 12-15)
+                const celebrateFrames = [12, 13, 14, 15];
+                const frameNumber = celebrateFrames[doctor.currentFrame];
+                const frameX = frameNumber * 32; // Each frame is 32px wide
+                
+                this.ctx.drawImage(
+                    this.doctorSprite,
+                    frameX, 0, 32, 32,  // Source: current celebration frame
+                    pixelX, pixelY, 32, 32  // Destination: position on canvas
+                );
+            } else {
+                // Draw fallback rectangle if sprite not loaded
+                this.ctx.fillStyle = '#4A90E2';
+                this.ctx.fillRect(pixelX + 4, pixelY + 4, 24, 24);
+                
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(pixelX + 4, pixelY + 4, 24, 24);
+            }
+        });
+    }
+    
+    drawBeds() {
+        this.beds.forEach(bed => {
+            const pixelX = Math.round(bed.pixelX);
+            const pixelY = Math.round(bed.pixelY);
+            
+            if (this.bedSprite && this.bedSprite.complete) {
+                // Draw bed sprite (32x32)
+                this.ctx.drawImage(
+                    this.bedSprite,
+                    0, 0, 32, 32,  // Source: full bed sprite
+                    pixelX, pixelY, 32, 32  // Destination: position on canvas
+                );
+            } else {
+                // Draw fallback rectangle if bed sprite not loaded
+                this.ctx.fillStyle = '#87CEEB';
+                this.ctx.fillRect(pixelX + 2, pixelY + 2, 28, 28);
+                
+                this.ctx.strokeStyle = '#4682B4';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(pixelX + 2, pixelY + 2, 28, 28);
+            }
+        });
+    }
+    
+    createSuccessEffect(x, y) {
+        // Create confetti/money effect at treatment completion
+        const effect = {
+            id: Date.now() + Math.random(),
+            x: x * this.tileSize + this.tileSize / 2, // Center of tile
+            y: y * this.tileSize + this.tileSize / 2,
+            particles: [],
+            life: 60, // 60 frames (1 second at 60fps)
+            maxLife: 60
+        };
+        
+        // Create multiple particles for confetti effect
+        for (let i = 0; i < 8; i++) {
+            effect.particles.push({
+                x: effect.x,
+                y: effect.y,
+                vx: (Math.random() - 0.5) * 4, // Random horizontal velocity
+                vy: (Math.random() - 0.5) * 4 - 2, // Random vertical velocity (upward bias)
+                color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'][Math.floor(Math.random() * 6)],
+                size: Math.random() * 4 + 2
+            });
+        }
+        
+        this.effects.push(effect);
+        console.log(`Success effect created at (${x}, ${y})`);
+    }
+    
+    updateEffects() {
+        this.effects.forEach((effect, index) => {
+            effect.life--;
+            
+            // Update particles
+            effect.particles.forEach(particle => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.vy += 0.1; // Gravity
+            });
+            
+            // Remove effect when life expires
+            if (effect.life <= 0) {
+                this.effects.splice(index, 1);
+            }
+        });
+    }
+    
+    drawEffects() {
+        this.effects.forEach(effect => {
+            const alpha = effect.life / effect.maxLife; // Fade out over time
+            
+            effect.particles.forEach(particle => {
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha;
+                this.ctx.fillStyle = particle.color;
+                this.ctx.beginPath();
+                this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            });
         });
     }
     
@@ -478,6 +758,17 @@ class DentalSimulation {
             }
         }
         return null; // No available chairs
+    }
+    
+    findAvailableBed() {
+        for (const bed of this.treatmentBeds) {
+            const bedKey = `${bed.x},${bed.y}`;
+            if (!this.occupiedBeds.has(bedKey)) {
+                this.occupiedBeds.add(bedKey);
+                return bed;
+            }
+        }
+        return null; // No available beds
     }
     
     generatePath(startX, startY, endX, endY) {
@@ -512,13 +803,55 @@ class DentalSimulation {
         return path;
     }
     
+    generatePathToBed(startX, startY, endX, endY) {
+        // Special pathfinding for treatment beds: col 2 → row 5 → right → up → face down
+        const path = [];
+        
+        // Step 1: Go to column 2 (main corridor)
+        for (let x = startX - 1; x >= 2; x--) {
+            path.push({x: x, y: startY});
+        }
+        
+        // Step 2: Walk up or down to row 5 in column 2
+        if (startY < 5) {
+            // Go down to row 5
+            for (let y = startY + 1; y <= 5; y++) {
+                path.push({x: 2, y: y});
+            }
+        } else if (startY > 5) {
+            // Go up to row 5
+            for (let y = startY - 1; y >= 5; y--) {
+                path.push({x: 2, y: y});
+            }
+        }
+        
+        // Step 3: Walk right until reaching target column
+        for (let x = 2 + 1; x <= endX; x++) {
+            path.push({x: x, y: 5});
+        }
+        
+        // Step 4: Walk up to target row
+        for (let y = 5 - 1; y >= endY; y--) {
+            path.push({x: endX, y: y});
+        }
+        
+        return path;
+    }
+    
     updatePatientMovement(patient) {
         if (patient.currentPathIndex >= patient.path.length) {
             // Reached destination
-            patient.state = 'sitting';
-            patient.animationState = 'idle';
-            patient.direction = 'right'; // Face right when sitting
-            console.log(`Patient ${patient.spriteKey} reached chair and is sitting`);
+            if (patient.state === 'walking') {
+                patient.state = 'sitting';
+                patient.animationState = 'idle';
+                patient.direction = 'right'; // Face right when sitting
+                console.log(`Patient ${patient.spriteKey} reached chair and is sitting`);
+            } else if (patient.state === 'walking_to_treatment') {
+                patient.state = 'treating';
+                patient.animationState = 'idle';
+                patient.direction = 'down'; // Face down when on treatment bed
+                console.log(`Patient ${patient.spriteKey} reached treatment bed and is being treated`);
+            }
             return;
         }
         
