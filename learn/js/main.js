@@ -13,11 +13,20 @@ function init() {
     
     game = new Game(canvas);
     setupUI();
+    startGameLoop();
     window.game = game;
     
     console.log('Initialization complete!');
     console.log('Available maps:', game.getAvailableMaps());
     console.log('Current map:', game.getCurrentMapInfo());
+}
+
+function startGameLoop() {
+    function gameLoop() {
+        game.render();
+        requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
 }
 
 function setupUI() {
