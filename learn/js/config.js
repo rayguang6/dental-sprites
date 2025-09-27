@@ -76,20 +76,20 @@ export const MAPS = {
     restaurant: {
         name: 'Restaurant',
         imagePath: 'images/Restaurant Map.png',
-        gridWidth: 12,
-        gridHeight: 8,
-        spawnPoint: { x: 6, y: 7 },
+        gridWidth: 11,
+        gridHeight: 12,
+        spawnPoint: { x: 5, y: 11 },
         tables: [
-            { x: 2, y: 2 }, { x: 2, y: 4 }, { x: 2, y: 6 },
-            { x: 10, y: 2 }, { x: 10, y: 4 }, { x: 10, y: 6 }
+            { x: 1, y: 2 }, { x: 3, y: 2 }, { x: 5, y: 2 },
+            { x: 7, y: 2 }, { x: 9, y: 2 }
         ],
         kitchen: [
-            { x: 6, y: 1 }
+            { x: 5, y: 0 }
         ],
         npcs: [
-            { spriteKey: 'people1', x: 1, y: 4, behavior: 'idleCustomer' },
-            { spriteKey: 'people1', x: 11, y: 2, behavior: 'idleCustomer' },
-            { spriteKey: 'people1', x: 6, y: 2, behavior: 'guard' }
+            { spriteKey: 'people1', x: 0, y: 10, behavior: 'idleCustomer' },
+            { spriteKey: 'people1', x: 5, y: 3, behavior: 'receptionist' },
+            { spriteKey: 'people1', x: 1, y: 4, behavior: 'guard' }
         ]
     }
 };
